@@ -7,7 +7,6 @@ import math
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
-
 def read_world_data(filename):
     '''
     read_world_data reads the world data from the file and returns a dictionary
@@ -89,12 +88,15 @@ class robot():
             Complete this Stub for the measurement model which is based on range only
             Range only implies that the error has to be calculated based only on the range values
         '''
-        error = 1
-            for landmark in ids:
-                    lx,ly = wrld_dict[landmark]
-                    exp_dist = np.sqrt((self.x - lx)**2 + (self.y - ly)**2 )
-                    real_dist = ranges[landmark]
-                    error *= norm.pdf(real_dist, loc=exp_dist, scale=0.2)
+        error = 1.0
+
+        for i in range(len(ids)):
+            landmark_id = ids[i]
+            measure_dist = ranges[i]
+            lx, ly = wrld_dict[landmark_id]
+            exp_dist = np.sqrt((self.x - lx)**2 + (self.y - ly)**2)
+            prob = norm.pdf(measure_dist, loc=exp_dist, scale=0.2)
+            error *= prob
         return error
 
 
@@ -139,87 +141,78 @@ class robot():
         '''
         #noise parameters
         self.weights  = float(weight)
+trajectory_x = []
+trajectory_y = []
 
+def get_mean_position(p, t):
+    '''
+    get_mean_position: extract position from particle set
+    '''
+    x_pos = np.mean([part.x for part in p])
+    y_pos = np.mean([part.y for part in p])
+    orientation = np.mean([part.orientation for part in p])
 
+    # Guardar trayectoria acumulada
+    trajectory_x.append(x_pos)
+    trajectory_y.append(y_pos)
 
-# def get_mean_position(p,t):
-#     '''
-#     get_mean_position: extract position from particle set
-#     '''
-#     x = 0.0
-#     y = 0.0
-#     orientation = 0.0
-   
-#     # TODO: Write the code here to calculate the mean position and orientation
-#     # of all the particles
+    # Plot
+    plt.clf()
 
-#     # Particles are plotted here 
-#     # Lists x_pos and y_pos contains the x and y positions of all the particles which
-#     # can be accessed from p[i].x, p[i].y. avg_oreint is the average orientation
-#     # of all the particles
-        
-#     plt.clf()
-#     plt.plot(x_pos,y_pos,'r.')
-#     quiver_len = 3.0
-#     plt.quiver(x, y, quiver_len * np.cos(orientation), quiver_len * np.sin(orientation),angles='xy',scale_units='xy')
+    # Dibuja camino acumulado del robot estimado
+    plt.plot(trajectory_x, trajectory_y, 'r-', linewidth=1)  # trayectoria
+    plt.plot(x_pos, y_pos, 'ro')  # posición actual
 
-#     plt.plot(lx,ly,'bo',markersize=10)
-#     plt.axis([-2, 12, -2, 12])
-#     plt.draw()
-#     ##
-#     # file = "./plots/pf_plot_" + str(t).zfill(3)
-#     # plt.savefig(file)
-#     # Note: for creating animation, in plots folder do:
-#     # ffmpeg -framerate 25 -i pf_plot_%03d.png -c:v libx264 -profile:v high -crf 20 -pix_fmt yuv420p pf_movie.mp4
-#     plt.pause(0.1)
-#     return [x, y, orientation]
+    # Dirección con flecha
+    quiver_len = 3.0
+    plt.quiver(x_pos, y_pos, quiver_len * np.cos(orientation), quiver_len * np.sin(orientation),
+               angles='xy', scale_units='xy')
+
+    # Landmarks
+    plt.plot(lx, ly, 'bo', markersize=5)
+    plt.axis([-2, 12, -2, 12])
+    plt.grid(True)
+    plt.title(f"Time step {t}")
+
+    # Guardar imagen
+    file = f"./tp3/plots/pf_plot_{str(t).zfill(3)}.png"
+    plt.savefig(file)
+    plt.close()
+
+    return [x_pos, y_pos, orientation]
+
 
 
 def resample_particles(weights, particles):
     '''
     resample_particles: takes the current particles and weights and resamples them based on that.
     '''
-    # TODO: Complete this Stub to resample the weights of the particles
-
     #Sum the weights 
-    
-    
-    
-    
-    
-    #normalize the weights
-    
-    
-
-    
-    
-    
+    sum_weights = np.sum(weights)
+    if sum_weights > 1: 
+        #normalize the weights
+        for w in range(len(weights)):
+            weights[w]/= sum(weights)
     # calculate the PDF of the weights
     pdf=[]        
-    for k in range(len(p)):
-        
-
-    
-
+    aux = 0 
+    for k in range(len(particles)):
+        aux = aux + weights[k]
+        pdf.append(aux)
     # Calculate the step for random sampling , it depends on number of 
     #particles
-
-    
-    step=        
-    
-    
+    step= 1/len(particles)      
     # Sample a value in between [0,step) uniformly
-    
-    seed = 
-    #print 'Seed is %0.15s and step is %0.15s' %(seed, step)
-
-
+    seed = random.uniform(0,step)
     # resample the particles based on the seed , step and cacluated pdf
-    for h in range(len(p)):
-        # Write the code here                 
-            
-            
-        
+    p_sampled = []
+    print(len(particles))
+    for h in range(len(particles)):
+        u = seed + h*step
+        for p in range(len(pdf)): 
+            if u< pdf[p]:
+                p_sampled.append(particles[p])
+                break
     return p_sampled
 
 
@@ -227,13 +220,11 @@ def particle_filter(data_dict,world_dict, N):
     '''
     particle_filter: The main particle filter function. Creates the particles and updates them
     ''' 
-
     # Make particles
     p = []
     for i in range(N):
         r = robot()
         p.append(r)
-
     # Update particles
     for t in range((len(data_dict)-1)//2):
         # motion update (prediction)
@@ -241,19 +232,12 @@ def particle_filter(data_dict,world_dict, N):
         for i in range(N):
             p2.append(p[i].mov_odom(data_dict[t,'odom'],noise_param))
         p = p2
-
         # measurement update
         w = []
         for i in range(N):
             w.append(p[i].measurement_prob_range(data_dict[t,'sensor']['id'],data_dict[t,'sensor']['range'],world_dict))
-           
-        
-        # TODO: Complete this Stub to resample the weights of the particles
-
-
         get_mean_position(p,t)
         p = resample_particles(w,p)
-        
     return get_mean_position(p,t)
 
 ## Main loop Starts here
@@ -265,7 +249,6 @@ parser.add_argument('N', type=int, help='Number of particles')
 
 args = parser.parse_args()
 N = args.N
-
 
 noise_param = [0.1, 0.1 ,0.05 ,0.05]
 
@@ -284,5 +267,3 @@ for i in range (len(world_data)):
 
 estimated_position = particle_filter(data_dict,world_data,N)
 
-plt.ioff()
-plt.show()
