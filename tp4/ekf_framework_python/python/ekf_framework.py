@@ -91,16 +91,20 @@ def prediction_step(mu, sigma, odometry):
     
     
 def correction_step(mu, sigma, measurements, world_dict):
+    #Get the states
     x, y, theta = mu
+    # Read in the ids and ranges  from measurements using dictionary indexing
     ids = measurements['id']
     ranges = measurements['range']
-    
-    n = len(ids)
-    H = np.zeros((n, 3))
-    expected_ranges = np.zeros(n)
 
-    for i, lm_id in enumerate(ids):
-        lx, ly = world_dict[lm_id]
+     # Initialize the Jacobian of h
+    H = np.zeros((len(ids),3))
+    expected_ranges = np.zeros(len(ids))
+
+    #Vectorize measurements 
+    for i in range(len(ids)):
+        # For each measurement , compute a row of H
+        lx, ly = world_dict[i+1]
         dx = x - lx
         dy = y - ly
         q = np.sqrt(dx**2 + dy**2)
@@ -115,11 +119,10 @@ def correction_step(mu, sigma, measurements, world_dict):
 
         # h(mu): medición esperada
         expected_ranges[i] = q
-
-    # Matriz de ruido de sensor (asumimos independiente)
-    Rt = np.eye(n) * 0.5
-
-    # Ganancia de Kalman
+     
+    # Noise covariance for the measurements
+    Rt = np.eye(len(ids)) * 0.5
+    # Gain of Kalman
     S = H @ sigma @ H.T + Rt
     K = sigma @ H.T @ np.linalg.inv(S)
 
@@ -127,8 +130,8 @@ def correction_step(mu, sigma, measurements, world_dict):
     z = np.array(ranges)
     z_hat = expected_ranges
     innovation = z - z_hat
-
-    # Corrección de la media y covarianza
+    
+     #Kalman correction for mean and covariance
     mu = mu + K @ innovation
     sigma = (np.eye(3) - K @ H) @ sigma
 
@@ -185,7 +188,7 @@ for i in range (len(world_data)):
 
 
 
-for t in range(len(data_dict)//2):
+for t in range((len(data_dict)//2)-1):
     # Perform the prediction step of the EKF
     [mu, sigma] = prediction_step(mu, sigma, data_dict[t,'odom'])
    
